@@ -664,11 +664,13 @@ export function MapRenderer({ tiles, cmds, selKey, mode, mvCmd, panSt, zoom, ZOO
 
     const w = Math.max(200, el.clientWidth || window.innerWidth);
     const h = Math.max(200, el.clientHeight || (window.innerHeight - 38));
+    /* On mobile use resolution=1 to keep canvas pixel count manageable */
+    const isMobileDev = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
     const baseOpts = {
       width: w, height: h,
       backgroundColor: 0x091e32,
       antialias: false,
-      resolution: Math.min(window.devicePixelRatio || 1, 2),
+      resolution: isMobileDev ? 1 : Math.min(window.devicePixelRatio || 1, 2),
       autoDensity: true,
     };
     let app;
@@ -720,13 +722,20 @@ export function MapRenderer({ tiles, cmds, selKey, mode, mvCmd, panSt, zoom, ZOO
     needsFullRedraw.current = true;
 
     /* ── Animation ticker ── */
+    /* Throttle on mobile/Canvas2D: run anim every N ticks to keep frame budget */
+    const isLowPerf = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    const animEvery = isLowPerf ? 6 : 2; // mobile ~10fps anim, desktop ~30fps anim
     let animTime = 0;
+    let animTick = 0;
     const tickFn = () => {
       animTime += 0.025;
-      try {
-        drawAnimations(animGfxRef.current, tilesRef.current, animTime);
-      } catch (e) {
-        console.error("[MapRenderer] animation tick error:", e);
+      animTick++;
+      if (animTick % animEvery === 0) {
+        try {
+          drawAnimations(animGfxRef.current, tilesRef.current, animTime);
+        } catch (e) {
+          console.error("[MapRenderer] animation tick error:", e);
+        }
       }
     };
     app.ticker.add(tickFn);
@@ -877,20 +886,15 @@ export function MapRenderer({ tiles, cmds, selKey, mode, mvCmd, panSt, zoom, ZOO
       }
     }
 
-    /* gap fills and blends — only rebuild when tiles change */
+    /* gap fills, blends, and props — only rebuild when tile set changes */
     if (needsFullRedraw.current || didBlend) {
       if (gapGfxRef.current)   drawGapFills(gapGfxRef.current, tiles);
       if (blendGfxRef.current) drawBlend(blendGfxRef.current, tiles);
-      needsFullRedraw.current = false;
-    }
-
-    /* props — always redraw so they survive any rendering order edge case */
-    if (propsGfxRef.current) {
-      try {
-        drawAllProps(propsGfxRef.current, tiles);
-      } catch (e) {
-        console.error("[MapRenderer] drawAllProps error:", e);
+      if (propsGfxRef.current) {
+        try { drawAllProps(propsGfxRef.current, tiles); }
+        catch (e) { console.error("[MapRenderer] drawAllProps error:", e); }
       }
+      needsFullRedraw.current = false;
     }
 
     /* march lines — player only (attack=red, move/reinforce=green) */
@@ -942,7 +946,7 @@ export function MapRenderer({ tiles, cmds, selKey, mode, mvCmd, panSt, zoom, ZOO
     <div
       ref={containerRef}
       style={{
-        position: "absolute", inset: 0, top: 38,
+        position: "absolute", top: 38, left: 0, right: 0, bottom: 0,
         userSelect: "none", touchAction: "none",
         background: "#091e32", overflow: "hidden",
         cursor: "grab",
