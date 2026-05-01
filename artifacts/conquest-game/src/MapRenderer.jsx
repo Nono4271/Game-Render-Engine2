@@ -27,10 +27,10 @@ const TV_DEF = TV.grass;
 
 /* ─── Resource prop colors ───────────────────────────────────────────────── */
 const RC = {
-  wood:  { a: 0x2a5a1e, b: 0x3a7a2a, c: 0x1a4010 },
-  stone: { a: 0x7a7a8a, b: 0xa0a0b0, c: 0x4a4a5a },
-  ore:   { a: 0x4a6a8a, b: 0x5a8aaa, c: 0x2a4a6a },
-  gas:   { a: 0x4a8a50, b: 0x6aaa70, c: 0x2a6030 },
+  wood:  { shadow: 0x0a1a08, trunk: 0x5a3a18, dark: 0x1a4010, mid: 0x2a6018, light: 0x3a8a22, hi: 0x60c040 },
+  stone: { shadow: 0x181820, dark: 0x3a3a48, mid: 0x6a6a7a, light: 0x9a9aaa, hi: 0xc8c8d8 },
+  ore:   { shadow: 0x0a0a18, dark: 0x1a2a50, mid: 0x2a4a80, light: 0x4a7ac0, hi: 0x88b8f0, glow: 0xaad4ff },
+  gas:   { shadow: 0x0a1a08, dark: 0x1a4a20, mid: 0x28802a, light: 0x50c050, hi: 0x90f090, glow: 0xb0ffb0 },
 };
 
 /* ─── Pan clamping ───────────────────────────────────────────────────────── */
@@ -190,43 +190,185 @@ function drawTile(gfx, tile, selKey, mode, hasCmds, mvCmdUid) {
 function drawRssProp(gfx, rss, cx, sy, c, r, pl) {
   const rnd = tileRng(c, r);
   const col = RC[rss] || RC.wood;
-  const cy2 = sy + TH / 2 + 2;
+  const ground = sy + TH / 2 + 1;
 
   if (rss === "wood") {
     const n = Math.min(4, pl + 1);
     for (let i = 0; i < n; i++) {
-      const dx = (rnd()-0.5)*TW*0.52, dy = (rnd()-0.5)*TH*0.50;
-      const sz = 4 + rnd()*4 + pl*1.4;
-      gfx.beginFill(col.c); gfx.drawEllipse(cx+dx, cy2+dy+sz*0.4, sz*0.45, sz*0.22); gfx.endFill();
-      gfx.beginFill(col.a); gfx.drawEllipse(cx+dx, cy2+dy, sz*0.65, sz*1.05); gfx.endFill();
-      gfx.beginFill(col.b, 0.65); gfx.drawEllipse(cx+dx-sz*0.14, cy2+dy-sz*0.2, sz*0.38, sz*0.45); gfx.endFill();
+      const dx = (rnd() - 0.5) * TW * 0.46;
+      const dy = (rnd() - 0.5) * TH * 0.32;
+      const sz = 5 + rnd() * 3 + pl * 1.2;
+      const bx = cx + dx, by = ground + dy;
+
+      /* shadow on ground */
+      gfx.beginFill(col.shadow, 0.55);
+      gfx.drawEllipse(bx, by + sz * 0.15, sz * 0.55, sz * 0.18);
+      gfx.endFill();
+
+      /* trunk */
+      const tw = Math.max(1.5, sz * 0.18), th = sz * 0.55;
+      gfx.beginFill(col.trunk);
+      gfx.drawRect(bx - tw / 2, by - th, tw, th);
+      gfx.endFill();
+
+      /* canopy — three stacked layers, darkest at base */
+      const layers = [
+        { yOff: 0,       rx: sz * 0.68, ry: sz * 0.52, col: col.dark,  alpha: 1 },
+        { yOff: -sz*0.28, rx: sz * 0.55, ry: sz * 0.44, col: col.mid,   alpha: 1 },
+        { yOff: -sz*0.52, rx: sz * 0.38, ry: sz * 0.32, col: col.light, alpha: 1 },
+      ];
+      for (const l of layers) {
+        gfx.lineStyle(0.8, col.dark, 0.6);
+        gfx.beginFill(l.col, l.alpha);
+        gfx.drawEllipse(bx, by - th + l.yOff, l.rx, l.ry);
+        gfx.endFill();
+        gfx.lineStyle(0);
+      }
+      /* highlight */
+      gfx.beginFill(col.hi, 0.35);
+      gfx.drawEllipse(bx - sz * 0.18, by - th - sz * 0.4, sz * 0.2, sz * 0.15);
+      gfx.endFill();
     }
+
   } else if (rss === "stone") {
     const n = Math.min(5, pl + 2);
     for (let i = 0; i < n; i++) {
-      const dx = (rnd()-0.5)*TW*0.48, dy = (rnd()-0.5)*TH*0.44;
-      const sz = 3 + rnd()*3 + pl;
-      gfx.beginFill(col.c, 0.9); gfx.drawEllipse(cx+dx+1, cy2+dy+1, sz*0.78, sz*0.48); gfx.endFill();
-      gfx.beginFill(col.a); gfx.drawEllipse(cx+dx, cy2+dy, sz*0.78, sz*0.48); gfx.endFill();
-      gfx.beginFill(col.b, 0.55); gfx.drawEllipse(cx+dx-sz*0.18, cy2+dy-sz*0.1, sz*0.32, sz*0.18); gfx.endFill();
+      const dx = (rnd() - 0.5) * TW * 0.44;
+      const dy = (rnd() - 0.5) * TH * 0.32;
+      const sz = 4 + rnd() * 3 + pl * 0.9;
+      const bx = cx + dx, by = ground + dy;
+      const skew = (rnd() - 0.5) * sz * 0.3;
+
+      /* drop shadow */
+      gfx.beginFill(col.shadow, 0.5);
+      gfx.drawEllipse(bx + 1, by + 2, sz * 0.75, sz * 0.28);
+      gfx.endFill();
+
+      /* main rock body — irregular polygon */
+      const pts = [
+        bx + skew,        by - sz * 0.85,   // top
+        bx + sz * 0.65,   by - sz * 0.35,   // top-right
+        bx + sz * 0.72,   by + sz * 0.1,    // right
+        bx + sz * 0.3,    by + sz * 0.38,   // bottom-right
+        bx - sz * 0.3,    by + sz * 0.38,   // bottom-left
+        bx - sz * 0.72,   by + sz * 0.1,    // left
+        bx - sz * 0.55,   by - sz * 0.45,   // top-left
+      ];
+      gfx.lineStyle(1, col.dark, 0.9);
+      gfx.beginFill(col.mid);
+      gfx.drawPolygon(pts);
+      gfx.endFill();
+      gfx.lineStyle(0);
+
+      /* dark shadow face — bottom right triangle */
+      gfx.beginFill(col.dark, 0.5);
+      gfx.drawPolygon([
+        bx + sz * 0.3,  by + sz * 0.38,
+        bx + sz * 0.72, by + sz * 0.1,
+        bx + sz * 0.65, by - sz * 0.35,
+        bx + skew * 0.5, by - sz * 0.1,
+      ]);
+      gfx.endFill();
+
+      /* highlight face — upper left */
+      gfx.beginFill(col.hi, 0.5);
+      gfx.drawPolygon([
+        bx + skew,       by - sz * 0.85,
+        bx - sz * 0.55,  by - sz * 0.45,
+        bx - sz * 0.2,   by - sz * 0.1,
+        bx + skew * 0.5, by - sz * 0.5,
+      ]);
+      gfx.endFill();
     }
+
   } else if (rss === "ore") {
+    /* crystal cluster */
     const n = Math.min(5, pl + 2);
     for (let i = 0; i < n; i++) {
-      const dx = (rnd()-0.5)*TW*0.46, dy = (rnd()-0.5)*TH*0.38;
-      const sz = 3 + rnd()*3 + pl*0.8;
-      gfx.beginFill(col.c); gfx.drawEllipse(cx+dx, cy2+dy, sz*0.58, sz*0.38); gfx.endFill();
-      gfx.beginFill(col.a); gfx.drawEllipse(cx+dx, cy2+dy-sz*0.28, sz*0.48, sz*0.68); gfx.endFill();
-      gfx.beginFill(col.b, 0.55); gfx.drawEllipse(cx+dx-sz*0.12, cy2+dy-sz*0.48, sz*0.22, sz*0.28); gfx.endFill();
+      const dx = (rnd() - 0.5) * TW * 0.4;
+      const dy = (rnd() - 0.5) * TH * 0.28;
+      const sz = 4 + rnd() * 3 + pl * 0.9;
+      const bx = cx + dx, by = ground + dy;
+      const lean = (rnd() - 0.5) * sz * 0.5;
+
+      /* glow base */
+      gfx.beginFill(col.glow, 0.12);
+      gfx.drawEllipse(bx, by + sz * 0.05, sz * 0.7, sz * 0.22);
+      gfx.endFill();
+
+      /* crystal shard — elongated hexagon */
+      const hw = sz * 0.28;
+      const crystal = [
+        bx + lean,        by - sz * 1.1,     // tip
+        bx + lean + hw,   by - sz * 0.5,     // upper-right
+        bx + hw * 1.1,    by,                // lower-right
+        bx,               by + sz * 0.22,    // base-center
+        bx - hw * 1.1,    by,                // lower-left
+        bx + lean - hw,   by - sz * 0.5,     // upper-left
+      ];
+      gfx.lineStyle(1, col.dark, 1);
+      gfx.beginFill(col.mid);
+      gfx.drawPolygon(crystal);
+      gfx.endFill();
+      gfx.lineStyle(0);
+
+      /* bright left face */
+      gfx.beginFill(col.light, 0.65);
+      gfx.drawPolygon([
+        bx + lean,       by - sz * 1.1,
+        bx + lean - hw,  by - sz * 0.5,
+        bx - hw * 1.1,   by,
+        bx,              by + sz * 0.05,
+        bx + lean * 0.4, by - sz * 0.4,
+      ]);
+      gfx.endFill();
+
+      /* specular highlight near tip */
+      gfx.beginFill(col.hi, 0.8);
+      gfx.drawEllipse(bx + lean - hw * 0.3, by - sz * 0.88, sz * 0.1, sz * 0.18);
+      gfx.endFill();
     }
+
   } else {
-    const n = Math.min(4, pl + 1);
+    /* gas — glowing orbs */
+    const n = Math.min(3, pl + 1);
     for (let i = 0; i < n; i++) {
-      const dx = (rnd()-0.5)*TW*0.44, dy = (rnd()-0.5)*TH*0.34;
-      const sz = 3 + rnd()*3 + pl;
-      gfx.beginFill(col.c, 0.65); gfx.drawEllipse(cx+dx, cy2+dy+sz*0.28, sz*0.48, sz*0.28); gfx.endFill();
-      gfx.beginFill(col.a, 0.82); gfx.drawEllipse(cx+dx, cy2+dy, sz*0.58, sz*0.88); gfx.endFill();
-      gfx.beginFill(col.b, 0.45); gfx.drawEllipse(cx+dx-sz*0.08, cy2+dy-sz*0.22, sz*0.28, sz*0.38); gfx.endFill();
+      const dx = (rnd() - 0.5) * TW * 0.38;
+      const dy = (rnd() - 0.5) * TH * 0.24;
+      const sz = 4 + rnd() * 2.5 + pl * 0.8;
+      const bx = cx + dx, by = ground + dy;
+
+      /* outer glow ring */
+      gfx.beginFill(col.glow, 0.08);
+      gfx.drawEllipse(bx, by - sz * 0.3, sz * 1.1, sz * 0.85);
+      gfx.endFill();
+
+      /* mid glow */
+      gfx.beginFill(col.light, 0.18);
+      gfx.drawEllipse(bx, by - sz * 0.35, sz * 0.82, sz * 0.62);
+      gfx.endFill();
+
+      /* main orb */
+      gfx.lineStyle(0.8, col.dark, 0.7);
+      gfx.beginFill(col.mid, 0.88);
+      gfx.drawEllipse(bx, by - sz * 0.42, sz * 0.58, sz * 0.46);
+      gfx.endFill();
+      gfx.lineStyle(0);
+
+      /* bright core */
+      gfx.beginFill(col.hi, 0.55);
+      gfx.drawEllipse(bx - sz * 0.14, by - sz * 0.6, sz * 0.22, sz * 0.17);
+      gfx.endFill();
+
+      /* small floating bubble above */
+      const bub = sz * 0.18;
+      const bubX = bx + (rnd() - 0.5) * sz * 0.4;
+      const bubY = by - sz * 0.95 - rnd() * sz * 0.3;
+      gfx.lineStyle(0.6, col.mid, 0.6);
+      gfx.beginFill(col.light, 0.25);
+      gfx.drawCircle(bubX, bubY, bub);
+      gfx.endFill();
+      gfx.lineStyle(0);
     }
   }
 }
