@@ -723,7 +723,11 @@ export function MapRenderer({ tiles, cmds, selKey, mode, mvCmd, panSt, zoom, ZOO
     let animTime = 0;
     const tickFn = () => {
       animTime += 0.025;
-      drawAnimations(animGfxRef.current, tilesRef.current, animTime);
+      try {
+        drawAnimations(animGfxRef.current, tilesRef.current, animTime);
+      } catch (e) {
+        console.error("[MapRenderer] animation tick error:", e);
+      }
     };
     app.ticker.add(tickFn);
 
@@ -873,12 +877,20 @@ export function MapRenderer({ tiles, cmds, selKey, mode, mvCmd, panSt, zoom, ZOO
       }
     }
 
-    /* gap fills, blends, and props — only rebuild when tiles change */
+    /* gap fills and blends — only rebuild when tiles change */
     if (needsFullRedraw.current || didBlend) {
       if (gapGfxRef.current)   drawGapFills(gapGfxRef.current, tiles);
       if (blendGfxRef.current) drawBlend(blendGfxRef.current, tiles);
-      if (propsGfxRef.current) drawAllProps(propsGfxRef.current, tiles);
       needsFullRedraw.current = false;
+    }
+
+    /* props — always redraw so they survive any rendering order edge case */
+    if (propsGfxRef.current) {
+      try {
+        drawAllProps(propsGfxRef.current, tiles);
+      } catch (e) {
+        console.error("[MapRenderer] drawAllProps error:", e);
+      }
     }
 
     /* march lines — player only (attack=red, move/reinforce=green) */
