@@ -153,10 +153,7 @@ function drawTile(gfx, tile, selKey, mode, hasCmds, mvCmdUid) {
     gfx.beginFill(0x28dc6e, 0.22); gfx.drawPolygon(TOP); gfx.endFill();
   }
 
-  /* ── Resource props ── */
-  if (!isHQ && !isWin && rss) {
-    drawRssProp(gfx, rss, cx, sy, c, r, powerLevel || 1);
-  }
+  /* props drawn in separate layer above gap/blend — see drawAllProps */
 
   /* ── Commander highlight border ── */
   if (hasCmds && !isSel) {
@@ -425,6 +422,114 @@ function drawBlend(gfx, tiles) {
   }
 }
 
+/* ─── All props in one pass (drawn above gap/blend layers) ──────────────── */
+function drawAllProps(gfx, tiles) {
+  gfx.clear();
+  for (const tile of Object.values(tiles)) {
+    if (!tile.rss || tile.isHQ || tile.isWin) continue;
+    const { cx, cy } = isoXY(tile.c, tile.r);
+    const sy = cy - 4;
+    drawRssProp(gfx, tile.rss, cx, sy, tile.c, tile.r, tile.powerLevel || 1);
+  }
+}
+
+/* ─── Per-frame animations (ticker driven) ───────────────────────────────── */
+function drawAnimations(gfx, tiles, t) {
+  if (!gfx || !tiles) return;
+  gfx.clear();
+
+  for (const tile of Object.values(tiles)) {
+    if (!tile.rss || tile.isHQ || tile.isWin) continue;
+
+    const { cx, cy } = isoXY(tile.c, tile.r);
+    const sy = cy - 4;
+    const ground = sy + TH / 2 + 1;
+    const pl = tile.powerLevel || 1;
+    const phase0 = (tile.c * 1.618 + tile.r * 2.414) % (Math.PI * 2);
+
+    if (tile.rss === 'gas') {
+      const rnd = tileRng(tile.c, tile.r);
+      const n = Math.min(3, pl + 1);
+      for (let i = 0; i < n; i++) {
+        const dx = (rnd() - 0.5) * TW * 0.38;
+        const dy = (rnd() - 0.5) * TH * 0.24;
+        const sz = 4 + rnd() * 2.5 + pl * 0.8;
+        const bx = cx + dx, by = ground + dy;
+        rnd(); rnd(); // consume static bubX / bubY calls
+
+        const phase = (t * 1.1 + phase0 + i * 1.4) % (Math.PI * 2);
+        const pulse  = 0.5 + 0.5 * Math.sin(phase);
+
+        /* pulsing outer glow */
+        gfx.beginFill(RC.gas.glow, 0.06 + pulse * 0.1);
+        gfx.drawEllipse(bx, by - sz * 0.3, sz * 1.25 + pulse * sz * 0.2, sz * 0.95 + pulse * sz * 0.12);
+        gfx.endFill();
+
+        /* floating bubble that bobs */
+        const bubOff = Math.sin(t * 1.4 + phase0 + i * 2.1) * sz * 0.15;
+        gfx.lineStyle(0.5, RC.gas.mid, 0.5);
+        gfx.beginFill(RC.gas.hi, 0.12 + pulse * 0.1);
+        gfx.drawCircle(bx, by - sz * 0.98 + bubOff, sz * 0.2);
+        gfx.endFill();
+        gfx.lineStyle(0);
+      }
+
+    } else if (tile.rss === 'ore') {
+      const rnd = tileRng(tile.c, tile.r);
+      const n = Math.min(5, pl + 2);
+      for (let i = 0; i < n; i++) {
+        const dx   = (rnd() - 0.5) * TW * 0.4;
+        const dy   = (rnd() - 0.5) * TH * 0.28;
+        const sz   = 4 + rnd() * 3 + pl * 0.9;
+        const lean = (rnd() - 0.5) * sz * 0.5;
+        const bx = cx + dx, by = ground + dy;
+
+        const phase   = (t * 0.9 + phase0 + i * 2.3) % (Math.PI * 2);
+        const sparkle = Math.max(0, Math.sin(phase));
+
+        if (sparkle > 0.55) {
+          const intensity = (sparkle - 0.55) / 0.45;
+          /* bright glint at tip */
+          gfx.beginFill(RC.ore.hi, intensity * 0.95);
+          gfx.drawCircle(bx + lean - sz * 0.1, by - sz * 1.0, sz * 0.16);
+          gfx.endFill();
+          /* cross flare lines */
+          const sw = sz * 0.28 * intensity;
+          gfx.lineStyle(0.8, RC.ore.glow, intensity * 0.7);
+          gfx.moveTo(bx + lean - sz * 0.1 - sw, by - sz * 1.0);
+          gfx.lineTo(bx + lean - sz * 0.1 + sw, by - sz * 1.0);
+          gfx.moveTo(bx + lean - sz * 0.1, by - sz * 1.0 - sw * 0.6);
+          gfx.lineTo(bx + lean - sz * 0.1, by - sz * 1.0 + sw * 0.6);
+          gfx.lineStyle(0);
+        }
+      }
+
+    } else if (tile.rss === 'wood') {
+      const rnd = tileRng(tile.c, tile.r);
+      const n = Math.min(4, pl + 1);
+      for (let i = 0; i < n; i++) {
+        const dx = (rnd() - 0.5) * TW * 0.46;
+        const dy = (rnd() - 0.5) * TH * 0.32;
+        const sz = 5 + rnd() * 3 + pl * 1.2;
+        const bx = cx + dx, by = ground + dy;
+        const th = sz * 0.55;
+
+        const phase = (t * 0.4 + phase0 + i * 1.7) % (Math.PI * 2);
+        const sway  = Math.sin(phase) * sz * 0.07;
+
+        /* swaying canopy highlight */
+        gfx.beginFill(RC.wood.hi, 0.15 + Math.abs(Math.sin(phase)) * 0.12);
+        gfx.drawEllipse(
+          bx - sz * 0.18 + sway,
+          by - th - sz * 0.4 - Math.abs(Math.sin(phase)) * sz * 0.04,
+          sz * 0.22, sz * 0.16
+        );
+        gfx.endFill();
+      }
+    }
+  }
+}
+
 /* ─── March lines ────────────────────────────────────────────────────────── */
 function drawMarchLines(gfx, cmds, tiles) {
   gfx.clear();
@@ -511,6 +616,8 @@ export function MapRenderer({ tiles, cmds, selKey, mode, mvCmd, panSt, zoom, ZOO
   const tileContRef    = useRef(null); // PIXI.Container for tiles
   const gapGfxRef      = useRef(null);
   const blendGfxRef    = useRef(null);
+  const propsGfxRef    = useRef(null); // props layer — above gap/blend
+  const animGfxRef     = useRef(null); // ticker-driven animation layer
   const marchGfxRef    = useRef(null);
   const cmdGfxRef      = useRef(null);
   const tileGfxMap     = useRef(new Map()); // key → { gfx, hash }
@@ -581,7 +688,7 @@ export function MapRenderer({ tiles, cmds, selKey, mode, mvCmd, panSt, zoom, ZOO
     world.y = panRef.current.y;
     world.scale.set(zoomRef.current);
 
-    /* layer order: tiles → gapFill → blend → marchLines → cmdIcons */
+    /* layer order: tiles → gapFill → blend → props → animFX → marchLines → cmdIcons */
     const tileCont = new PIXI.Container();
     world.addChild(tileCont);
     tileContRef.current = tileCont;
@@ -594,6 +701,14 @@ export function MapRenderer({ tiles, cmds, selKey, mode, mvCmd, panSt, zoom, ZOO
     world.addChild(blendGfx);
     blendGfxRef.current = blendGfx;
 
+    const propsGfx = new PIXI.Graphics();
+    world.addChild(propsGfx);
+    propsGfxRef.current = propsGfx;
+
+    const animGfx = new PIXI.Graphics();
+    world.addChild(animGfx);
+    animGfxRef.current = animGfx;
+
     const marchGfx = new PIXI.Graphics();
     world.addChild(marchGfx);
     marchGfxRef.current = marchGfx;
@@ -603,6 +718,14 @@ export function MapRenderer({ tiles, cmds, selKey, mode, mvCmd, panSt, zoom, ZOO
     cmdGfxRef.current = cmdGfx;
 
     needsFullRedraw.current = true;
+
+    /* ── Animation ticker ── */
+    let animTime = 0;
+    const tickFn = () => {
+      animTime += 0.025;
+      drawAnimations(animGfxRef.current, tilesRef.current, animTime);
+    };
+    app.ticker.add(tickFn);
 
     /* resize observer */
     const ro = new ResizeObserver(() => {
@@ -686,6 +809,7 @@ export function MapRenderer({ tiles, cmds, selKey, mode, mvCmd, panSt, zoom, ZOO
 
     return () => {
       ro.disconnect();
+      app.ticker.remove(tickFn);
       el.removeEventListener("wheel", onWheel);
       el.removeEventListener("touchstart", onTS);
       el.removeEventListener("touchmove", onTM);
@@ -749,10 +873,11 @@ export function MapRenderer({ tiles, cmds, selKey, mode, mvCmd, panSt, zoom, ZOO
       }
     }
 
-    /* gap fills (static — only redraw when tiles object changes reference) */
+    /* gap fills, blends, and props — only rebuild when tiles change */
     if (needsFullRedraw.current || didBlend) {
       if (gapGfxRef.current)   drawGapFills(gapGfxRef.current, tiles);
       if (blendGfxRef.current) drawBlend(blendGfxRef.current, tiles);
+      if (propsGfxRef.current) drawAllProps(propsGfxRef.current, tiles);
       needsFullRedraw.current = false;
     }
 
