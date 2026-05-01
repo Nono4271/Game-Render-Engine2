@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/conquest-game/"
+title = "Rise to War"
+version = "1.0.0"
+id = "artifacts/conquest-game"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/conquest-game/" ]
+localPort = 18826
+
+[services.development]
+run = "pnpm --filter @workspace/conquest-game run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/conquest-game", "run", "build" ]
+publicDir = "artifacts/conquest-game/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18826"
+BASE_PATH = "/conquest-game/"
